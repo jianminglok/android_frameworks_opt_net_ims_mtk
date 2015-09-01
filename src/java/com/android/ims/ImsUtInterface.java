@@ -143,7 +143,7 @@ public interface ImsUtInterface {
     /**
      * Modifies the configuration of the call barring.
      */
-    public void updateCallBarring(int cbType, int action,
+    public void updateCallBarring(int cbType, boolean enable,
             Message result, String[] barrList);
 
     /**
@@ -151,13 +151,6 @@ public interface ImsUtInterface {
      */
     public void updateCallForward(int action, int condition, String number,
             int timeSeconds, Message result);
-
-    /**
-     * Modifies the configuration of the call forward Timer
-     */
-    public void updateCallForwardUncondTimer(int starthour, int startminute,
-            int endhour, int endminute, int action, int condition,
-            String number, Message result);
 
     /**
      * Modifies the configuration of the call waiting.

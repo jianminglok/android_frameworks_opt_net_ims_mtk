@@ -307,7 +307,7 @@ public class ImsUt implements ImsUtInterface {
      * Modifies the configuration of the call barring.
      */
     @Override
-    public void updateCallBarring(int cbType, int action, Message result, String[] barrList) {
+    public void updateCallBarring(int cbType, boolean enable, Message result, String[] barrList) {
         if (DBG) {
             if (barrList != null) {
                 String bList = new String();
@@ -315,17 +315,17 @@ public class ImsUt implements ImsUtInterface {
                     bList.concat(barrList[i] + " ");
                 }
                 log("updateCallBarring :: Ut=" + miUt + ", cbType=" + cbType
-                        + ", action=" + action + ", barrList=" + bList);
+                        + ", enable=" + enable + ", barrList=" + bList);
             }
             else {
                 log("updateCallBarring :: Ut=" + miUt + ", cbType=" + cbType
-                        + ", action=" + action);
+                        + ", enable=" + enable);
             }
         }
 
         synchronized(mLockObj) {
             try {
-                int id = miUt.updateCallBarring(cbType, action, barrList);
+                int id = miUt.updateCallBarring(cbType, enable, barrList);
 
                 if (id < 0) {
                     sendFailureReport(result,
@@ -356,38 +356,6 @@ public class ImsUt implements ImsUtInterface {
         synchronized(mLockObj) {
             try {
                 int id = miUt.updateCallForward(action, condition, number, timeSeconds);
-
-                if (id < 0) {
-                    sendFailureReport(result,
-                            new ImsReasonInfo(ImsReasonInfo.CODE_UT_SERVICE_UNAVAILABLE, 0));
-                    return;
-                }
-
-                mPendingCmds.put(Integer.valueOf(id), result);
-            } catch (RemoteException e) {
-                sendFailureReport(result,
-                        new ImsReasonInfo(ImsReasonInfo.CODE_UT_SERVICE_UNAVAILABLE, 0));
-            }
-        }
-    }
-
-    /**
-     * Modifies the configuration of the call forward Timer.
-     */
-    @Override
-    public void updateCallForwardUncondTimer(int startHour, int startMinute, int endHour,
-            int endMinute, int action, int condition, String number, Message result) {
-        if (DBG) {
-            log("updateCallForwardUncondTimer :: Ut=" + miUt + ", action=" + action
-                    + ", condition=" + condition + ", number=" + number
-                    + ", startHour=" + startHour + ", startMinute=" + startMinute
-                    + ", endHour=" + endHour + ", endMinute=" + endMinute);
-        }
-
-        synchronized(mLockObj) {
-            try {
-                int id = miUt.updateCallForwardUncondTimer(startHour, startMinute, endHour,
-                        endMinute, action, condition, number);
 
                 if (id < 0) {
                     sendFailureReport(result,

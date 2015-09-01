@@ -22,7 +22,6 @@ import com.android.ims.ImsCallProfile;
 import com.android.ims.ImsConferenceState;
 import com.android.ims.ImsReasonInfo;
 import com.android.ims.ImsStreamMediaProfile;
-import android.telecom.Connection;
 
 /**
  * Provides the call initiation/termination, and media exchange between two IMS endpoints.
@@ -187,27 +186,17 @@ public class ImsCallSession {
         }
 
         /**
-         * Called when the session merge has been started.  At this point, the {@code newSession}
-         * represents the session which has been initiated to the IMS conference server for the
-         * new merged conference.
+         * Called when the session merge is done.
          *
          * @param session the session object that carries out the IMS session
          * @param newSession the session object that is merged with an active & hold session
          */
-        public void callSessionMergeStarted(ImsCallSession session,
+        public void callSessionMerged(ImsCallSession session,
                 ImsCallSession newSession, ImsCallProfile profile) {
         }
 
         /**
-         * Called when the session merge is successful and the merged session is active.
-         *
-         * @param session the session object that carries out the IMS session
-         */
-        public void callSessionMergeComplete(ImsCallSession session) {
-        }
-
-        /**
-         * Called when the session merge has failed.
+         * Called when the session merge is failed.
          *
          * @param session the session object that carries out the IMS session
          * @param reasonInfo detailed reason of the call merge failure
@@ -366,17 +355,6 @@ public class ImsCallSession {
                                        ImsReasonInfo reasonInfo) {
             // no-op
         }
-
-        /**
-         * Called when TTY mode of remote party changed
-         *
-         * @param session IMS session object
-         * @param mode TTY mode of remote party
-         */
-        public void callSessionTtyModeReceived(ImsCallSession session,
-                                       int mode) {
-            // no-op
-        }
     }
 
     private final IImsCallSession miSession;
@@ -468,23 +446,6 @@ public class ImsCallSession {
     }
 
     /**
-     * Gets the local call profile that this session is associated with
-     *
-     * @return the local call profile that this session is associated with
-     */
-    public ImsCallProfile getRemoteCallProfile() {
-        if (mClosed) {
-            return null;
-        }
-
-        try {
-            return miSession.getRemoteCallProfile();
-        } catch (RemoteException e) {
-            return null;
-        }
-    }
-
-    /**
      * Gets the video call provider for the session.
      *
      * @return The video call provider.
@@ -498,23 +459,6 @@ public class ImsCallSession {
             return miSession.getVideoCallProvider();
         } catch (RemoteException e) {
             return null;
-        }
-    }
-
-    /**
-     * Gets the call substate for this session.
-     *
-     * @return the call substate for this session.
-     */
-    public int getCallSubstate() {
-        if (mClosed) {
-            return Connection.CALL_SUBSTATE_NONE;
-        }
-
-        try {
-            return miSession.getCallSubstate();
-        } catch (RemoteException e) {
-            return Connection.CALL_SUBSTATE_NONE;
         }
     }
 
@@ -668,23 +612,6 @@ public class ImsCallSession {
     }
 
     /**
-     * Deflects an incoming call.
-     *
-     * @param number number to be deflected to
-     * @see Listener#callSessionDeflected, Listener#callSessionDeflectFailed
-     */
-    public void deflect(String number) {
-        if (mClosed) {
-            return;
-        }
-
-        try {
-            miSession.deflect(number);
-        } catch (RemoteException e) {
-        }
-    }
-
-    /**
      * Rejects an incoming call or session update.
      *
      * @param reason reason code to reject an incoming call
@@ -754,9 +681,9 @@ public class ImsCallSession {
 
     /**
      * Merges the active & hold call. When it succeeds,
-     * {@link Listener#callSessionMergeStarted} is called.
+     * {@link Listener#callSessionMerged} is called.
      *
-     * @see Listener#callSessionMergeStarted , Listener#callSessionMergeFailed
+     * @see Listener#callSessionMerged, Listener#callSessionMergeFailed
      */
     public void merge() {
         if (mClosed) {
@@ -860,38 +787,6 @@ public class ImsCallSession {
     }
 
     /**
-     * Starts a DTMF code. According to <a href="http://tools.ietf.org/html/rfc2833">RFC 2833</a>,
-     * event 0 ~ 9 maps to decimal value 0 ~ 9, '*' to 10, '#' to 11, event 'A' ~ 'D' to 12 ~ 15,
-     * and event flash to 16. Currently, event flash is not supported.
-     *
-     * @param c the DTMF to send. '0' ~ '9', 'A' ~ 'D', '*', '#' are valid inputs.
-     */
-    public void startDtmf(char c) {
-        if (mClosed) {
-            return;
-        }
-
-        try {
-            miSession.startDtmf(c);
-        } catch (RemoteException e) {
-        }
-    }
-
-    /**
-     * Stops a DTMF code.
-     */
-    public void stopDtmf() {
-        if (mClosed) {
-            return;
-        }
-
-        try {
-            miSession.stopDtmf();
-        } catch (RemoteException e) {
-        }
-    }
-
-    /**
      * Sends an USSD message.
      *
      * @param ussdMessage USSD message to send
@@ -904,23 +799,6 @@ public class ImsCallSession {
         try {
             miSession.sendUssd(ussdMessage);
         } catch (RemoteException e) {
-        }
-    }
-
-    /**
-     * Determines if the session is multiparty.
-     *
-     * @return {@code True} if the session is multiparty.
-     */
-    public boolean isMultiparty() {
-        if (mClosed) {
-            return false;
-        }
-
-        try {
-            return miSession.isMultiparty();
-        } catch (RemoteException e) {
-            return false;
         }
     }
 
@@ -1018,39 +896,17 @@ public class ImsCallSession {
         }
 
         /**
-         * Notifies the start of a call merge operation.
-         *
-         * @param session The call session.
-         * @param newSession The merged call session.
-         * @param profile The call profile.
+         * Notifiies the result of call merge operation.
          */
         @Override
-        public void callSessionMergeStarted(IImsCallSession session,
+        public void callSessionMerged(IImsCallSession session,
                 IImsCallSession newSession, ImsCallProfile profile) {
             if (mListener != null) {
-                mListener.callSessionMergeStarted(ImsCallSession.this,
+                mListener.callSessionMerged(ImsCallSession.this,
                         new ImsCallSession(newSession), profile);
             }
         }
 
-        /**
-         * Notifies the successful completion of a call merge operation.
-         *
-         * @param session The call session.
-         */
-        @Override
-        public void callSessionMergeComplete(IImsCallSession session) {
-            if (mListener != null) {
-                mListener.callSessionMergeComplete(ImsCallSession.this);
-            }
-        }
-
-        /**
-         * Notifies of a failure to perform a call merge operation.
-         *
-         * @param session The call session.
-         * @param reasonInfo The merge failure reason.
-         */
         @Override
         public void callSessionMergeFailed(IImsCallSession session,
                 ImsReasonInfo reasonInfo) {
@@ -1186,9 +1042,6 @@ public class ImsCallSession {
             }
         }
 
-        /**
-         * Notifies of handover failure info for this call
-         */
         @Override
         public void callSessionHandoverFailed(IImsCallSession session,
                                        int srcAccessTech, int targetAccessTech,
@@ -1198,55 +1051,5 @@ public class ImsCallSession {
                         targetAccessTech, reasonInfo);
             }
         }
-
-        /**
-         * Notifies the TTY mode received from remote party.
-         */
-        @Override
-        public void callSessionTtyModeReceived(IImsCallSession session,
-                int mode) {
-            if (mListener != null) {
-                mListener.callSessionTtyModeReceived(ImsCallSession.this, mode);
-            }
-        }
-
-        /**
-         * Notifies the result of deflect request.
-         */
-        @Override
-        public void callSessionDeflected(IImsCallSession session) {
-            if (mListener != null) {
-                //TODO: UI specific implementation.
-                //Vendor UI can listen to this callback to take action on success.
-            }
-        }
-
-        @Override
-        public void callSessionDeflectFailed(IImsCallSession session,
-                ImsReasonInfo reasonInfo) {
-            if (mListener != null) {
-                //TODO: UI specific implementation.
-                //Vendor UI can listen to this callback to take action on failure.
-            }
-        }
-    }
-
-    /**
-     * Provides a string representation of the {@link ImsCallSession}.  Primarily intended for
-     * use in log statements.
-     *
-     * @return String representation of session.
-     */
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[ImsCallSession objId:");
-        sb.append(System.identityHashCode(this));
-        sb.append(" state:");
-        sb.append(State.toString(getState()));
-        sb.append(" callId:");
-        sb.append(getCallId());
-        sb.append("]");
-        return sb.toString();
     }
 }

@@ -16,7 +16,6 @@
 
 package com.android.ims;
 
-import android.content.Context;
 import android.os.RemoteException;
 import android.telephony.Rlog;
 
@@ -24,7 +23,9 @@ import com.android.ims.ImsConfigListener;
 import com.android.ims.ImsReasonInfo;
 import com.android.ims.internal.IImsConfig;
 
-import java.lang.reflect.Method;
+import com.android.ims.mo.ImsIcsi;
+import com.android.ims.mo.ImsLboPcscf;
+import com.android.ims.mo.ImsPhoneCtx;
 
 /**
  * Provides APIs to get/set the IMS service feature/capability/parameters.
@@ -38,8 +39,6 @@ public class ImsConfig {
     private static final String TAG = "ImsConfig";
     private boolean DBG = true;
     private final IImsConfig miConfig;
-    private Context mContext;
-    private static final String MODIFY_PHONE_STATE = android.Manifest.permission.MODIFY_PHONE_STATE;
 
     /**
     * Defines IMS service/capability feature constants.
@@ -70,18 +69,6 @@ public class ImsConfig {
          * GSMA IR.94 over WiFi.
          */
         public static final int FEATURE_TYPE_VIDEO_OVER_WIFI = 3;
-
-        /**
-         * FEATURE_TYPE_UT supports features defined in 3GPP and
-         * GSMA IR.92 over LTE.
-         */
-        public static final int FEATURE_TYPE_UT_OVER_LTE = 4;
-
-       /**
-         * FEATURE_TYPE_UT_OVER_WIFI supports features defined in 3GPP and
-         * GSMA IR.92 over WiFi.
-         */
-        public static final int FEATURE_TYPE_UT_OVER_WIFI = 5;
     }
 
     /**
@@ -120,7 +107,7 @@ public class ImsConfig {
         public static final int MIN_SE = 3;
 
         /**
-         * SIP_INVITE cancellation time out value (in milliseconds). Integer format.
+         * SIP_INVITE cancellation time out value. Integer format.
          * Value is in Integer format.
          */
         public static final int CANCELLATION_TIMER = 4;
@@ -138,19 +125,19 @@ public class ImsConfig {
         public static final int SILENT_REDIAL_ENABLE = 6;
 
         /**
-         * SIP T1 timer value in milliseconds. See RFC 3261 for define.
+         * SIP T1 timer value in seconds. See RFC 3261 for define.
          * Value is in Integer format.
          */
         public static final int SIP_T1_TIMER = 7;
 
         /**
-         * SIP T2 timer value in milliseconds.  See RFC 3261 for define.
+         * SIP T2 timer value in seconds.  See RFC 3261 for define.
          * Value is in Integer format.
          */
         public static final int SIP_T2_TIMER  = 8;
 
          /**
-         * SIP TF timer value in milliseconds.  See RFC 3261 for define.
+         * SIP TF timer value in seconds.  See RFC 3261 for define.
          * Value is in Integer format.
          */
         public static final int SIP_TF_TIMER = 9;
@@ -166,76 +153,81 @@ public class ImsConfig {
          * Value is in Integer format.
          */
         public static final int LVC_SETTING_ENABLED = 11;
-        /**
-         * Domain Name for the device to populate the request URI for REGISTRATION.
-         * Value is in String format.
-         */
-        public static final int DOMAIN_NAME = 12;
-         /**
-         * Device Outgoing SMS based on either 3GPP or 3GPP2 standards.
-         * Value is in Integer format. 3GPP2(0), 3GPP(1)
-         */
-        public static final int SMS_FORMAT = 13;
-         /**
-         * Turns IMS ON/OFF on the device.
-         * Value is in Integer format. ON (1), OFF(0).
-         */
-        public static final int SMS_OVER_IP = 14;
-        /**
-         * Requested expiration for Published Online availability.
-         * Value is in Integer format.
-         */
-        public static final int PUBLISH_TIMER = 15;
-        /**
-         * Requested expiration for Published Offline availability.
-         * Value is in Integer format.
-         */
-        public static final int PUBLISH_TIMER_EXTENDED = 16;
-        /**
-         * Period of time the capability information of the  contact is cached on handset.
-         * Value is in Integer format.
-         */
-        public static final int CAPABILITIES_CACHE_EXPIRATION = 17;
-        /**
-         * Peiod of time the availability information of a contact is cached on device.
-         * Value is in Integer format.
-         */
-        public static final int AVAILABILITY_CACHE_EXPIRATION = 18;
-        /**
-         * Interval between successive capabilities polling.
-         * Value is in Integer format.
-         */
-        public static final int CAPABILITIES_POLL_INTERVAL = 19;
-        /**
-         * Minimum time between two published messages from the device.
-         * Value is in Integer format.
-         */
-        public static final int SOURCE_THROTTLE_PUBLISH = 20;
-        /**
-         * The Maximum number of MDNs contained in one Request Contained List.
-         * Value is in Integer format.
-         */
-        public static final int MAX_NUMENTRIES_IN_RCL = 21;
-        /**
-         * Expiration timer for subscription of a Request Contained List, used in capability polling.
-         * Value is in Integer format.
-         */
-        public static final int CAPAB_POLL_LIST_SUB_EXP = 22;
-        /**
-         * Applies compression to LIST Subscription.
-         * Value is in Integer format. Enable (1), Disable(0).
-         */
-        public static final int GZIP_FLAG = 23;
-        /**
-         * VOLTE Status for EAB/s status of Enabled (1), or Disabled (0).
-         * Value is in Integer format.
-         */
-        public static final int EAB_SETTING_ENABLED = 24;
+
         // Expand the operator config items as needed here, need to change
         // PROVISIONED_CONFIG_END after that.
-        public static final int PROVISIONED_CONFIG_END = EAB_SETTING_ENABLED;
+        public static final int PROVISIONED_CONFIG_END = LVC_SETTING_ENABLED;
 
         // Expand the operator config items as needed here.
+
+        /**
+         * SIP P-CSCF address.
+         */
+        public static final int IMS_MO_PCSCF = 100;
+
+        /*
+         * IMPI: private user identity specified in 3GPP TS 24.229.
+        */
+        public static final int IMS_MO_IMPI = 101;
+
+        /*
+         * IMPU: public user identity specified in 3GPP TS 24.229.
+        */
+        public static final int IMS_MO_IMPU = 102;
+
+        /*
+         * the home network domain name specified in 3GPP TS 24.229.         
+        */
+        public static final int IMS_MO_DOMAIN = 103;
+
+        /*
+         * indicates whether UE initiates resource allocation for the media controlled by IM.
+         * CN subsystem for all IMS sessions.
+        */
+        public static final int IMS_MO_RESOURCE = 104;
+
+        /*
+         * indicates network operator's preference for selection of the domain to.
+         * be used for voice communication services by the UE.
+        */
+        public static final int IMS_MO_VOICE_E = 105;
+
+        /*
+         * network operator's preference for selection of the domain to be.
+         * used for short message service (SMS) originated by the UE.
+        */
+        public static final int IMS_MO_SMS = 106;
+
+        /*
+         * indicates whether the UE sends keep alives
+        */
+        public static final int IMS_MO_KEEPALIVE = 107;
+
+        /*
+         * indicates network operator's preference for selection of the domain to be
+         * used for voice communication services by the UE
+        */
+        public static final int IMS_MO_VOICE_U = 108;
+
+        /*
+         * indicates whether the UE mobility management performs
+         * additional procedures as specified in 3GPP TS 24.008 and 3GPP TS 24.301
+         * to support terminating access domain selection by the network.
+        */
+        public static final int IMS_MO_MOBILITY = 109;
+
+        /*
+         * represents the value of the base-time parameter of the algorithm defined in subclause 4.5
+         * of RFC 5626.
+        */
+        public static final int IMS_MO_REG_BASE = 110;
+
+        /*
+         * represents the value of the max-time parameter of the algorithm defined in subclause 4.5
+         * of RFC 5626.
+        */
+        public static final int IMS_MO_REG_MAX = 111;
+
     }
 
     /**
@@ -250,18 +242,6 @@ public class ImsConfig {
         public static final int UNSUPPORTED_CAUSE_DISABLED = 4;
     }
 
-    /**
-     * Defines IMS get operation values.
-     */
-    public static class OperationValuesConstants {
-        /**
-         * Values related to Video Quality
-         */
-        public static final int VIDEO_QUALITY_UNKNOWN = -1;
-        public static final int VIDEO_QUALITY_LOW = 0;
-        public static final int VIDEO_QUALITY_HIGH = 1;
-    }
-
    /**
     * Defines IMS feature value.
     */
@@ -270,54 +250,53 @@ public class ImsConfig {
         public static final int ON = 1;
     }
 
-    public ImsConfig(IImsConfig iconfig, Context context) {
+    public ImsConfig(IImsConfig iconfig) {
         if (DBG) Rlog.d(TAG, "ImsConfig creates");
         miConfig = iconfig;
-        mContext = context;
     }
 
     /**
-     * Gets the provisioned value for IMS service/capabilities parameters used by IMS stack.
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
      * This function should not be called from the mainthread as it could block the
-     * mainthread.
+     * mainthread to cause ANR.
      *
      * @param item, as defined in com.android.ims.ImsConfig#ConfigConstants.
      * @return the value in Integer format.
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-    public int getProvisionedValue(int item) throws ImsException {
+    public int getMasterValue(int item) throws ImsException {
         int ret = 0;
         try {
-            ret = miConfig.getProvisionedValue(item);
+            ret = miConfig.getMasterValue(item);
         }  catch (RemoteException e) {
             throw new ImsException("getValue()", e,
                     ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
         }
-        if (DBG) Rlog.d(TAG, "getProvisionedValue(): item = " + item + ", ret =" + ret);
+        if (DBG) Rlog.d(TAG, "getMasterValue(): item = " + item + ", ret =" + ret);
 
         return ret;
     }
 
     /**
-     * Gets the provisioned value for IMS service/capabilities parameters used by IMS stack.
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
      * This function should not be called from the mainthread as it could block the
-     * mainthread.
+     * mainthread to cause ANR.
      *
      * @param item, as defined in com.android.ims.ImsConfig#ConfigConstants.
      * @return value in String format.
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-    public String getProvisionedStringValue(int item) throws ImsException {
+    public String getMasterStringValue(int item) throws ImsException {
         String ret = "Unknown";
         try {
-            ret = miConfig.getProvisionedStringValue(item);
+            ret = miConfig.getMasterStringValue(item);
         }  catch (RemoteException e) {
-            throw new ImsException("getProvisionedStringValue()", e,
+            throw new ImsException("getStringValue()", e,
                     ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
         }
-        if (DBG) Rlog.d(TAG, "getProvisionedStringValue(): item = " + item + ", ret =" + ret);
+        if (DBG) Rlog.d(TAG, "getMasterStringValue(): item = " + item + ", ret =" + ret);
 
         return ret;
     }
@@ -326,62 +305,52 @@ public class ImsConfig {
      * Sets the value for IMS service/capabilities parameters by
      * the operator device management entity.
      * This function should not be called from main thread as it could block
-     * mainthread.
+     * mainthread to cause ANR.
      *
      * @param item, as defined in com.android.ims.ImsConfig#ConfigConstants.
      * @param value in Integer format.
-     * @return as defined in com.android.ims.ImsConfig#OperationStatusConstants
+     * @return void
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-    public int setProvisionedValue(int item, int value)
+    public void setProvisionedValue(int item, int value)
             throws ImsException {
-        mContext.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
-        int ret = ImsConfig.OperationStatusConstants.UNKNOWN;
+        // TODO: ADD PERMISSION CHECK
         if (DBG) {
             Rlog.d(TAG, "setProvisionedValue(): item = " + item +
                     "value = " + value);
         }
         try {
-            ret = miConfig.setProvisionedValue(item, value);
+            miConfig.setProvisionedValue(item, value);
         }  catch (RemoteException e) {
             throw new ImsException("setProvisionedValue()", e,
                     ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
         }
-        if (DBG) {
-            Rlog.d(TAG, "setProvisionedValue(): item = " + item +
-                    " value = " + value + " ret = " + ret);
-        }
-        return ret;
     }
 
     /**
      * Sets the value for IMS service/capabilities parameters by
      * the operator device management entity.
-     * This function should not be called from main thread as it could block
-     * mainthread.
      *
      * @param item, as defined in com.android.ims.ImsConfig#ConfigConstants.
      * @param value in String format.
-     * @return as defined in com.android.ims.ImsConfig#OperationStatusConstants
+     * @return void.
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-    public int setProvisionedStringValue(int item, String value)
+    public void setProvisionedStringValue(int item, String value)
             throws ImsException {
-        mContext.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
-        int ret = ImsConfig.OperationStatusConstants.UNKNOWN;
-        try {
-            ret = miConfig.setProvisionedStringValue(item, value);
-        } catch (RemoteException e) {
-            throw new ImsException("setProvisionedStringValue()", e,
-                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
-        }
+        // TODO: ADD PERMISSION CHECK
         if (DBG) {
             Rlog.d(TAG, "setProvisionedStringValue(): item = " + item +
                     ", value =" + value);
         }
-        return ret;
+        try {
+            miConfig.setProvisionedStringValue(item, value);
+        }  catch (RemoteException e) {
+            throw new ImsException("setProvisionedStringValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
     }
 
     /**
@@ -421,7 +390,7 @@ public class ImsConfig {
      */
     public void setFeatureValue(int feature, int network, int value,
             ImsConfigListener listener) throws ImsException {
-        mContext.enforceCallingOrSelfPermission(MODIFY_PHONE_STATE, null);
+        // TODO: ADD PERMISSION CHECK (should there be permission, same as provisioning?)
         if (DBG) {
             Rlog.d(TAG, "setFeatureValue: feature = " + feature + ", network =" + network +
                     ", value =" + value + ", listener =" + listener);
@@ -435,62 +404,171 @@ public class ImsConfig {
     }
 
     /**
-     * Gets the value for IMS feature item for video call quality.
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
+     * This function should not be called from the mainthread as it could block the
+     * mainthread to cause ANR.
      *
-     * @param listener, provided if caller needs to be notified for set result.
-     * @return void
+     * @param item as defined in com.android.ims.ImsConfig#ConfigConstants.
+     * @return the value in String array.
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-    public void getVideoQuality(ImsConfigListener listener) throws ImsException {
+    public String[] getMasterStringArrayValue(int item) throws ImsException {
+        String[] ret = null;
+
         try {
-            Method m = miConfig.getClass().getDeclaredMethod("getVideoQuality",
-                    ImsConfigListener.class);
-            if (m != null) {
-                m.invoke(miConfig, listener);
-            }
-        } catch (Exception e) {
-            throw new ImsException("getVideoQuality()", e,
+            ret = miConfig.getMasterStringArrayValue(item);
+        }  catch (RemoteException e) {
+            throw new ImsException("getValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
+     * This function should not be called from the mainthread as it could block the
+     * mainthread to cause ANR.
+     *
+     * @return the Icsi object.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public ImsIcsi[] getMasterIcsiValue() throws ImsException {
+        ImsIcsi[] ret = null;
+
+        try {
+            ret = miConfig.getMasterIcsiValue();
+        }  catch (RemoteException e) {
+            throw new ImsException("getValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
+     * This function should not be called from the mainthread as it could block the
+     * mainthread to cause ANR.
+     *
+     * @return the LboPcscf object.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public ImsLboPcscf[] getMasterLboPcscfValue() throws ImsException {
+        ImsLboPcscf[] ret = null;
+
+        try {
+            ret = miConfig.getMasterLboPcscfValue();
+        }  catch (RemoteException e) {
+            throw new ImsException("getValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Gets the value for IMS service/capabilities parameters used by IMS stack.
+     * This function should not be called from the mainthread as it could block the
+     * mainthread to cause ANR.
+     *
+     * @return the ImsPhoneCtx object.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public ImsPhoneCtx[] getMasterImsPhoneCtxValue() throws ImsException {
+        ImsPhoneCtx[] ret = null;
+
+        try {
+            ret = miConfig.getMasterImsPhoneCtxValue();
+        }  catch (RemoteException e) {
+            throw new ImsException("getValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+
+        return ret;
+    }
+
+    /**
+     * Sets the value for IMS service/capabilities parameters by
+     * the operator device management entity.
+     *
+     * @param item as defined in com.android.ims.ImsConfig#ConfigConstants.
+     * @param value in String Array format.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public void setProvisionedStringArrayValue(int item, String[] value)
+        throws ImsException {
+
+        // TODO: ADD PERMISSION CHECK
+
+        try {
+            miConfig.setProvisionedStringArrayValue(item, value);
+        }  catch (RemoteException e) {
+            throw new ImsException("setProvisionedStringValue()", e,
                     ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
         }
     }
 
     /**
-     * Sets the value for IMS feature item video quality.
+     * Sets the value for IMS service/capabilities parameters by
+     * the operator device management entity.
      *
-     * @param quality, defines the value of video quality.
-     * @param listener, provided if caller needs to be notified for set result.
-     * @return void
+     * @param value in ImsIcsi[] object.
      *
      * @throws ImsException if calling the IMS service results in an error.
      */
-     public void setVideoQuality(int quality, ImsConfigListener listener) throws ImsException {
-        try {
-            Method m = miConfig.getClass().getDeclaredMethod("setVideoQuality",
-                    int.class, ImsConfigListener.class);
-            if (m != null) {
-                m.invoke(miConfig, quality, listener);
-            }
-        } catch (Exception e) {
-            throw new ImsException("setVideoQuality()", e,
-                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
-        }
-     }
+    public void setProvisionedIcsiValue(ImsIcsi[] value)
+        throws ImsException {
 
-    /**
-     * Gets the value for IMS Volte provisioned.
-     * It should be the same as operator provisioned value if applies.
-     *
-     * @return boolean
-     *
-     * @throws ImsException if calling the IMS service results in an error.
-     */
-    public boolean getVolteProvisioned() throws ImsException {
         try {
-           return miConfig.getVolteProvisioned();
-        } catch (RemoteException e) {
-            throw new ImsException("getVolteProvisioned()", e,
+            miConfig.setProvisionedIcsiValue(value);
+        }  catch (RemoteException e) {
+            throw new ImsException("setProvisionedStringValue()", e,
                     ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
         }
     }
+
+    /**
+     * Sets the value for IMS service/capabilities parameters by
+     * the operator device management entity.
+     *
+     * @param value in ImsLboPcscf[] object.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public void setProvisionedLboPcscfValue(ImsLboPcscf[] value)
+        throws ImsException {
+
+        try {
+            miConfig.setProvisionedLboPcscfValue(value);
+        }  catch (RemoteException e) {
+            throw new ImsException("setProvisionedStringValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+    }
+
+    /**
+     * Sets the value for IMS service/capabilities parameters by
+     * the operator device management entity.
+     *
+     * @param value in ImsPhoneCtx[] object.
+     *
+     * @throws ImsException if calling the IMS service results in an error.
+     */
+    public void setProvisionedPhoneCtxValue(ImsPhoneCtx[] value)
+        throws ImsException {
+
+        try {
+            miConfig.setProvisionedPhoneCtxValue(value);
+        }  catch (RemoteException e) {
+            throw new ImsException("setProvisionedStringValue()", e,
+                    ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
+        }
+    }
+
 }

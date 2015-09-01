@@ -26,10 +26,7 @@ import android.os.Process;
 import android.os.RemoteException;
 import android.os.ServiceManager;
 import android.os.SystemProperties;
-import android.provider.Settings;
-import android.telecom.TelecomManager;
 import android.telephony.Rlog;
-import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
 import com.android.ims.internal.IImsCallSession;
@@ -40,8 +37,7 @@ import com.android.ims.internal.IImsService;
 import com.android.ims.internal.IImsUt;
 import com.android.ims.internal.ImsCallSession;
 import com.android.ims.internal.IImsConfig;
-
-import com.android.internal.telephony.TelephonyProperties;
+import com.android.internal.telephony.PhoneConstants;
 
 import java.util.HashMap;
 
@@ -54,21 +50,25 @@ import java.util.HashMap;
  * @hide
  */
 public class ImsManager {
+    /*
+     * Shared preference constants storing the "Enhanced 4G LTE Mode" configuration
+     */
+    public static final String IMS_SHARED_PREFERENCES = "IMS_PREFERENCES";
+    public static final String KEY_IMS_ON = "IMS";
+    public static final boolean IMS_DEFAULT_SETTING = true;
 
     /*
      * Debug flag to override configuration flag
      */
-    public static final String PROPERTY_DBG_VOLTE_AVAIL_OVERRIDE = "persist.dbg.volte_avail_ovr";
-    public static final int PROPERTY_DBG_VOLTE_AVAIL_OVERRIDE_DEFAULT = 0;
-    public static final String PROPERTY_DBG_VT_AVAIL_OVERRIDE = "persist.dbg.vt_avail_ovr";
-    public static final int PROPERTY_DBG_VT_AVAIL_OVERRIDE_DEFAULT = 0;
+    public static final String PROPERTY_DBG_VOLTE_VT_AVAIL_OVERRIDE = "persist.dbg.volte_avail_ovr";
+    public static final int PROPERTY_DBG_VOLTE_VT_AVAIL_OVERRIDE_DEFAULT = 0;
 
     /**
      * For accessing the IMS related service.
      * Internal use only.
      * @hide
      */
-    private static final String IMS_SERVICE = "ims";
+    public static final String IMS_SERVICE = "ims";
 
     /**
      * The result code to be sent back with the incoming call {@link PendingIntent}.
@@ -81,6 +81,13 @@ public class ImsManager {
      * @see #open(PendingIntent, ImsConnectionStateListener)
      */
     public static final String EXTRA_CALL_ID = "android:imsCallID";
+
+    /**
+     * Key to retrieve the sequence number from an incoming call intent.
+     * @see #open(PendingIntent, ImsConnectionStateListener)
+     * @hide
+     */
+    public static final String EXTRA_SEQ_NUM = "android:imsSeqNum";
 
     /**
      * Action to broadcast when ImsService is up.
@@ -100,11 +107,11 @@ public class ImsManager {
 
     /**
      * Part of the ACTION_IMS_SERVICE_UP or _DOWN intents.
-     * A long value; the phone ID corresponding to the IMS service coming up or down.
+     * A long value; the subId corresponding to the IMS service coming up or down.
      * Internal use only.
      * @hide
      */
-    public static final String EXTRA_PHONE_ID = "android:phone_id";
+    public static final String EXTRA_SUBID = "android:subid";
 
     /**
      * Action for the incoming call intent for the Phone app.
@@ -131,77 +138,14 @@ public class ImsManager {
      */
     public static final String EXTRA_USSD = "android:ussd";
 
-    /**
-     * Part of the ACTION_IMS_INCOMING_CALL intents.
-     * A boolean value; Flag to indicate whether the call is an unknown
-     * dialing call. Such calls are originated by sending commands (like
-     * AT commands) directly to modem without Android involvement.
-     * Even though they are not incoming calls, they are propagated
-     * to Phone app using same ACTION_IMS_INCOMING_CALL intent.
-     * Internal use only.
-     * @hide
-     */
-    public static final String EXTRA_IS_UNKNOWN_CALL = "codeaurora:isUnknown";
-
-    /**
-     * Part of the ACTION_IMS_INCOMING_CALL intents.
-     * A string value which hold the address of call.
-     * Used during conference scenario or during incoming phantom call
-     * @hide
-     */
-    public static final String EXTRA_UNKNOWN_CALL_ADDRESS = "codeaurora:unknownCallAddress";
-
-    /**
-     * @hide
-     */
-    public static final int CALL_ACTIVE = 1;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_HOLD = 2;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_DIALING = 3;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_ALERTING = 4;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_INCOMING = 5;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_WAITING = 6;
-
-    /**
-     * @hide
-     */
-    public static final int CALL_END = 7;
-
-    /**
-     * Part of the ACTION_IMS_INCOMING_CALL intents.
-     * An int value which hold the state of call.
-     * Used during conference scenario or during incoming phantom call
-     * @hide
-     */
-    public static final String EXTRA_UNKNOWN_CALL_STATE = "codeaurora.unknownCallState";
-
     private static final String TAG = "ImsManager";
     private static final boolean DBG = true;
 
-    private static HashMap<Integer, ImsManager> sImsManagerInstances =
-            new HashMap<Integer, ImsManager>();
+    private static HashMap<Long, ImsManager> sImsManagerInstances =
+            new HashMap<Long, ImsManager>();
 
     private Context mContext;
-    private int mPhoneId;
+    private long mSubId;
     private IImsService mImsService = null;
     private ImsServiceDeathRecipient mDeathRecipient = new ImsServiceDeathRecipient();
     // Ut interface for the supplementary service configuration
@@ -216,16 +160,16 @@ public class ImsManager {
      * Gets a manager instance.
      *
      * @param context application context for creating the manager object
-     * @param phoneId the phone ID for the IMS Service
-     * @return the manager instance corresponding to the phoneId
+     * @param subId the subscription ID for the IMS Service
+     * @return the manager instance corresponding to the subId
      */
-    public static ImsManager getInstance(Context context, int phoneId) {
+    public static ImsManager getInstance(Context context, long subId) {
         synchronized (sImsManagerInstances) {
-            if (sImsManagerInstances.containsKey(phoneId))
-                return sImsManagerInstances.get(phoneId);
+            if (sImsManagerInstances.containsKey(subId))
+                return sImsManagerInstances.get(subId);
 
-            ImsManager mgr = new ImsManager(context, phoneId);
-            sImsManagerInstances.put(phoneId, mgr);
+            ImsManager mgr = new ImsManager(context, subId);
+            sImsManagerInstances.put(subId, mgr);
 
             return mgr;
         }
@@ -235,132 +179,34 @@ public class ImsManager {
      * Returns the user configuration of Enhanced 4G LTE Mode setting
      */
     public static boolean isEnhanced4gLteModeSettingEnabledByUser(Context context) {
-        int enabled = android.provider.Settings.Global.getInt(
-                    context.getContentResolver(),
-                    android.provider.Settings.Global.ENHANCED_4G_MODE_ENABLED, ImsConfig.FeatureValueConstants.ON);
-        return (enabled == 1)? true:false;
+        return context.getSharedPreferences(IMS_SHARED_PREFERENCES,
+                Context.MODE_WORLD_READABLE).getBoolean(KEY_IMS_ON,
+                IMS_DEFAULT_SETTING);
     }
 
     /**
-     * Change persistent Enhanced 4G LTE Mode setting
+     * Returns a platform configuration which may override the user setting.
      */
-    public static void setEnhanced4gLteModeSetting(Context context, boolean enabled) {
-        int value = enabled ? 1 : 0;
-        android.provider.Settings.Global.putInt(
-                context.getContentResolver(),
-                android.provider.Settings.Global.ENHANCED_4G_MODE_ENABLED, value);
-
-        if (isNonTtyOrTtyOnVolteEnabled(context)) {
-            ImsManager imsManager = ImsManager.getInstance(context,
-                    SubscriptionManager.getDefaultVoicePhoneId());
-            if (imsManager != null) {
-                try {
-                    imsManager.setAdvanced4GMode(enabled);
-                } catch (ImsException ie) {
-                    // do nothing
-                }
-            }
-        }
-    }
-
-    /**
-     * Indicates whether the call is non-TTY or if TTY - whether TTY on VoLTE is
-     * supported.
-     */
-    public static boolean isNonTtyOrTtyOnVolteEnabled(Context context) {
-        if (context.getResources().getBoolean(
-                com.android.internal.R.bool.config_carrier_volte_tty_supported)) {
-            return true;
-        }
-
-        return Settings.Secure.getInt(context.getContentResolver(),
-                Settings.Secure.PREFERRED_TTY_MODE, TelecomManager.TTY_MODE_OFF)
-                == TelecomManager.TTY_MODE_OFF;
-    }
-
-    /**
-     * Returns a platform configuration for VoLTE which may override the user setting.
-     */
-    public static boolean isVolteEnabledByPlatform(Context context) {
-        if (SystemProperties.getInt(PROPERTY_DBG_VOLTE_AVAIL_OVERRIDE,
-                PROPERTY_DBG_VOLTE_AVAIL_OVERRIDE_DEFAULT) == 1) {
-            return true;
-        }
-
-        boolean disabledByGlobalSetting = android.provider.Settings.Global.getInt(
-                context.getContentResolver(),
-                android.provider.Settings.Global.VOLTE_FEATURE_DISABLED, 0) == 1;
-
-        return context.getResources().getBoolean(
-                com.android.internal.R.bool.config_device_volte_available) && context.getResources()
-                .getBoolean(com.android.internal.R.bool.config_carrier_volte_available)
-                && !disabledByGlobalSetting;
-    }
-
-    /*
-     * Indicates whether VoLTE is provisioned on device
-     */
-    public static boolean isVolteProvisionedOnDevice(Context context) {
-        boolean isProvisioned = true;
-        if (context.getResources().getBoolean(
-                        com.android.internal.R.bool.config_carrier_volte_provisioned)) {
-            isProvisioned = false; // disable on any error
-            ImsManager mgr = ImsManager.getInstance(context,
-                    SubscriptionManager.getDefaultVoiceSubId());
-            if (mgr != null) {
-                try {
-                    ImsConfig config = mgr.getConfigInterface();
-                    if (config != null) {
-                        isProvisioned = config.getVolteProvisioned();
-                    }
-                } catch (ImsException ie) {
-                    // do nothing
-                }
-            }
-        }
-
-        return isProvisioned;
-    }
-
-    /**
-     * Returns a platform configuration for VT which may override the user setting.
-     *
-     * Note: VT presumes that VoLTE is enabled (these are configuration settings
-     * which must be done correctly).
-     */
-    public static boolean isVtEnabledByPlatform(Context context) {
-        if (SystemProperties.getInt(PROPERTY_DBG_VT_AVAIL_OVERRIDE,
-                PROPERTY_DBG_VT_AVAIL_OVERRIDE_DEFAULT) == 1) {
+    public static boolean isEnhanced4gLteModeSettingEnabledByPlatform(Context context) {
+		/*
+        if (SystemProperties.getInt(PROPERTY_DBG_VOLTE_VT_AVAIL_OVERRIDE,
+                PROPERTY_DBG_VOLTE_VT_AVAIL_OVERRIDE_DEFAULT) == 1) {
             return true;
         }
 
         return
                 context.getResources().getBoolean(
-                        com.android.internal.R.bool.config_device_vt_available) &&
+                        com.android.internal.R.bool.config_device_volte_vt_available) &&
                 context.getResources().getBoolean(
-                        com.android.internal.R.bool.config_carrier_vt_available);
+                        com.android.internal.R.bool.config_carrier_volte_vt_available);
+		*/
+		return false;
     }
 
-    private ImsManager(Context context, int phoneId) {
+    private ImsManager(Context context, long subId) {
         mContext = context;
-        mPhoneId = phoneId;
+        mSubId = subId;
         createImsService(true);
-    }
-
-    /*
-     * Returns a flag indicating whether the IMS service is available.
-     */
-    public boolean isServiceAvailable() {
-        if (mImsService != null) {
-            return true;
-        }
-
-        IBinder binder = ServiceManager.checkService(getImsServiceName(mPhoneId));
-        if (binder != null) {
-            return true;
-        }
-
-        return false;
     }
 
     /**
@@ -401,7 +247,7 @@ public class ImsManager {
         int result = 0;
 
         try {
-            result = mImsService.open(mPhoneId, serviceClass, incomingCallPendingIntent,
+            result = mImsService.open(serviceClass, incomingCallPendingIntent,
                     createRegistrationListenerProxy(serviceClass, listener));
         } catch (RemoteException e) {
             throw new ImsException("open()", e,
@@ -574,9 +420,8 @@ public class ImsManager {
 
         call.setListener(listener);
         ImsCallSession session = createCallSession(serviceId, profile);
-        boolean isConferenceUri = profile.getCallExtraBoolean(
-                TelephonyProperties.EXTRAS_IS_CONFERENCE_URI, false);
-        if (!isConferenceUri && (callees != null) && (callees.length == 1)) {
+
+        if ((callees != null) && (callees.length == 1)) {
             call.start(session, callees[0]);
         } else {
             call.start(session, callees);
@@ -653,12 +498,12 @@ public class ImsManager {
             checkAndThrowExceptionIfServiceUnavailable();
 
             try {
-                IImsConfig config = mImsService.getConfigInterface(mPhoneId);
+                IImsConfig config = mImsService.getConfigInterface();
                 if (config == null) {
                     throw new ImsException("getConfigInterface()",
                             ImsReasonInfo.CODE_LOCAL_SERVICE_UNAVAILABLE);
                 }
-                mConfig = new ImsConfig(config, mContext);
+                mConfig = new ImsConfig(config);
             } catch (RemoteException e) {
                 throw new ImsException("getConfigInterface()", e,
                         ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
@@ -666,33 +511,6 @@ public class ImsManager {
         }
         if (DBG) log("getConfigInterface(), mConfig= " + mConfig);
         return mConfig;
-    }
-
-    public void setUiTTYMode(Context context, int serviceId, int uiTtyMode, Message onComplete)
-            throws ImsException {
-
-        checkAndThrowExceptionIfServiceUnavailable();
-
-        try {
-            mImsService.setUiTTYMode(serviceId, uiTtyMode, onComplete);
-        } catch (RemoteException e) {
-            throw new ImsException("setTTYMode()", e,
-                    ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
-        }
-
-        /* TODO: config_carrier_volte_tty_supported needs to be enabled for
-                 carriers that support it in their respective MCC-MNC config.xml
-                 Example: values-mcc310-mnc230
-                 Uncomment the code below after the change is done. Leaving this
-                 commented so that TTY over VoLTE call is not blocked from apps.
-        */
-        /*
-        if (!context.getResources().getBoolean(
-                com.android.internal.R.bool.config_carrier_volte_tty_supported)) {
-            setAdvanced4GMode((uiTtyMode == TelecomManager.TTY_MODE_OFF) &&
-                    isEnhanced4gLteModeSettingEnabledByUser(context));
-        }
-        */
     }
 
     /**
@@ -707,6 +525,21 @@ public class ImsManager {
         }
 
         return incomingCallIntent.getStringExtra(EXTRA_CALL_ID);
+    }
+
+    /**
+     * Gets the sequence number from the specified incoming call broadcast intent.
+     *
+     * @param incomingCallIntent the incoming call broadcast intent
+     * @return the sequence number or null if the intent does not contain it
+     * @hide
+     */
+    private static int getSeqNum(Intent incomingCallIntent) {
+        if (incomingCallIntent == null) {
+            return (-1);
+        }
+
+        return incomingCallIntent.getIntExtra(EXTRA_SEQ_NUM, -1);
     }
 
     /**
@@ -738,8 +571,9 @@ public class ImsManager {
         }
     }
 
-    private static String getImsServiceName(int phoneId) {
-        // TODO: MSIM implementation needs to decide on service name as a function of phoneId
+    private static String getImsServiceName(long subId) {
+        // TODO: MSIM implementation needs to decide on service name as a function of subId
+        // or value derived from subId (slot ID?)
         return IMS_SERVICE;
     }
 
@@ -748,14 +582,14 @@ public class ImsManager {
      */
     private void createImsService(boolean checkService) {
         if (checkService) {
-            IBinder binder = ServiceManager.checkService(getImsServiceName(mPhoneId));
+            IBinder binder = ServiceManager.checkService(getImsServiceName(mSubId));
 
             if (binder == null) {
                 return;
             }
         }
 
-        IBinder b = ServiceManager.getService(getImsServiceName(mPhoneId));
+        IBinder b = ServiceManager.getService(getImsServiceName(mSubId));
 
         if (b != null) {
             try {
@@ -810,7 +644,7 @@ public class ImsManager {
         checkAndThrowExceptionIfServiceUnavailable();
 
         try {
-            mImsService.turnOnIms(mPhoneId);
+            mImsService.turnOnIms();
         } catch (RemoteException e) {
             throw new ImsException("turnOnIms() ", e, ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
         }
@@ -823,13 +657,10 @@ public class ImsManager {
         if (config != null) {
             config.setFeatureValue(ImsConfig.FeatureConstants.FEATURE_TYPE_VOICE_OVER_LTE,
                     TelephonyManager.NETWORK_TYPE_LTE, turnOn ? 1 : 0, null);
-            if (isVtEnabledByPlatform(mContext)) {
-                // TODO: once VT is available on platform replace the '1' with the current
-                // user configuration of VT.
-                config.setFeatureValue(ImsConfig.FeatureConstants.FEATURE_TYPE_VIDEO_OVER_LTE,
-                        TelephonyManager.NETWORK_TYPE_LTE, turnOn ? 1 : 0, null);
-            }
+            config.setFeatureValue(ImsConfig.FeatureConstants.FEATURE_TYPE_VIDEO_OVER_LTE,
+                    TelephonyManager.NETWORK_TYPE_LTE, turnOn ? 1 : 0, null);
         }
+
         if (turnOn) {
             turnOnIms();
         } else if (mContext.getResources().getBoolean(
@@ -847,7 +678,7 @@ public class ImsManager {
         checkAndThrowExceptionIfServiceUnavailable();
 
         try {
-            mImsService.turnOffIms(mPhoneId);
+            mImsService.turnOffIms();
         } catch (RemoteException e) {
             throw new ImsException("turnOffIms() ", e, ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
         }
@@ -866,7 +697,7 @@ public class ImsManager {
 
             if (mContext != null) {
                 Intent intent = new Intent(ACTION_IMS_SERVICE_DOWN);
-                intent.putExtra(EXTRA_PHONE_ID, mPhoneId);
+                intent.putExtra(EXTRA_SUBID, mSubId);
                 mContext.sendBroadcast(new Intent(intent));
             }
         }
@@ -901,38 +732,15 @@ public class ImsManager {
         }
 
         @Override
-        public void registrationProgressing() {
-            if (DBG) {
-                log("registrationProgressing ::");
-            }
-
-            if (mListener != null) {
-                mListener.onImsProgressing();
-            }
-        }
-
-        @Override
-        public void registrationDisconnected(ImsReasonInfo imsReasonInfo) {
-            if (DBG) {
-                log("registrationDisconnected :: imsReasonInfo" + imsReasonInfo);
-            }
-
-            if (mListener != null) {
-                mListener.onImsDisconnected(imsReasonInfo);
-            }
-        }
-
-        @Override
         public void registrationDisconnected() {
             if (DBG) {
-                log("registrationDisconnected");
+                log("registrationDisconnected ::");
             }
 
             if (mListener != null) {
                 mListener.onImsDisconnected();
             }
         }
-
 
         @Override
         public void registrationResumed() {
@@ -977,15 +785,6 @@ public class ImsManager {
             }
         }
 
-        @Override
-        public void voiceMessageCountUpdate(int count) {
-            log("voiceMessageCountUpdate :: count=" + count);
-
-            if (mListener != null) {
-                mListener.onVoiceMessageCountChanged(count);
-            }
-        }
-
     }
     /**
      * Gets the ECBM interface to request ECBM exit.
@@ -1012,5 +811,68 @@ public class ImsManager {
             }
         }
         return mEcbm;
+    }
+
+    /**
+     * To Allow or refuse incoming call indication to send to App.
+     *
+     * @param serviceId a service id which is obtained from {@link ImsManager#open}
+     * @param incomingCallIntent the incoming call broadcast intent
+     * @param isAllow to indication to allow or refuse the incoming call indication
+     * @hide
+     */
+    public void setCallIndication(int serviceId, Intent incomingCallIndicationIntent, boolean isAllow) throws ImsException {
+        if (DBG) {
+            log("setCallIndication :: serviceId=" + serviceId
+                    + ", incomingCallIndication=" + incomingCallIndicationIntent);
+        }
+
+        checkAndThrowExceptionIfServiceUnavailable();
+
+        if (incomingCallIndicationIntent == null) {
+            throw new ImsException("Can't retrieve session with null intent",
+                    ImsReasonInfo.CODE_LOCAL_ILLEGAL_ARGUMENT);
+        }
+
+        int incomingServiceId = getServiceId(incomingCallIndicationIntent);
+
+        if (serviceId != incomingServiceId) {
+            throw new ImsException("Service id is mismatched in the incoming call intent",
+                    ImsReasonInfo.CODE_LOCAL_ILLEGAL_ARGUMENT);
+        }
+
+        String callId = getCallId(incomingCallIndicationIntent);
+
+        if (callId == null) {
+            throw new ImsException("Call ID missing in the incoming call intent",
+                    ImsReasonInfo.CODE_LOCAL_ILLEGAL_ARGUMENT);
+        }
+
+        int seqNum = getSeqNum(incomingCallIndicationIntent);
+
+        if (seqNum == -1) {
+            throw new ImsException("seqNum missing in the incoming call intent",
+                    ImsReasonInfo.CODE_LOCAL_ILLEGAL_ARGUMENT);
+        }
+
+        try {
+            mImsService.SetCallIndication(callId, seqNum, isAllow);
+        } catch (RemoteException e) {
+                    throw new ImsException("setCallIndication()", e,
+                            ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
+        }
+    }
+
+    public int getImsState()throws ImsException {
+        int imsState = PhoneConstants.IMS_STATE_DISABLED;
+
+        checkAndThrowExceptionIfServiceUnavailable();
+
+        try {
+                imsState = mImsService.getImsState();
+        } catch (RemoteException e) {
+            throw new ImsException("turnOnIms() ", e, ImsReasonInfo.CODE_LOCAL_IMS_SERVICE_DOWN);
+        }
+        return imsState;
     }
 }

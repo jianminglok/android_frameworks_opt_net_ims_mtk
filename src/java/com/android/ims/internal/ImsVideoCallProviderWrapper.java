@@ -91,7 +91,7 @@ public class ImsVideoCallProviderWrapper extends Connection.VideoProvider {
             mHandler.obtainMessage(MSG_CHANGE_PEER_DIMENSIONS, args).sendToTarget();
         }
 
-        @Override
+        // @Override
         public void changeVideoQuality(int videoQuality) {
             mHandler.obtainMessage(MSG_CHANGE_VIDEO_QUALITY, videoQuality, 0).sendToTarget();
         }

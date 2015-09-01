@@ -109,7 +109,7 @@ public abstract class ImsVideoCallProvider {
         }
 
         public void setDeviceOrientation(int rotation) {
-            mProviderHandler.obtainMessage(MSG_SET_DEVICE_ORIENTATION, rotation, 0).sendToTarget();
+            mProviderHandler.obtainMessage(MSG_SET_DEVICE_ORIENTATION, rotation).sendToTarget();
         }
 
         public void setZoom(float value) {
@@ -236,16 +236,6 @@ public abstract class ImsVideoCallProvider {
         if (mCallback != null) {
             try {
                 mCallback.changeCameraCapabilities(CameraCapabilities);
-            } catch (RemoteException ignored) {
-            }
-        }
-    }
-
-    /** @see Connection.VideoProvider#changeVideoQuality */
-    public void changeVideoQuality(int videoQuality) {
-        if (mCallback != null) {
-            try {
-                mCallback.changeVideoQuality(videoQuality);
             } catch (RemoteException ignored) {
             }
         }
