@@ -16,7 +16,7 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-LOCAL_AIDL_INCLUDES := $(LOCAL_PATH)/src/java
+LOCAL_AIDL_INCLUDES := $(LOCAL_PATH)/src
 LOCAL_SRC_FILES := \
     $(call all-java-files-under, src/java) \
 	$(call all-java-files-under, src/org) \
