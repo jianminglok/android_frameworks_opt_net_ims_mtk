@@ -81,4 +81,15 @@ public class ImsConnectionStateListener {
     public void onVoiceMessageCountChanged(int count) {
         // no-op
     }
+
+    // MTK
+
+    /**
+     * Called when the device is disconnected from the IMS network.
+     * @param cause
+     *            Ims disconnection error cause.
+     */
+    public void onImsDisconnectedWithCause(int cause) {
+        // no-op
+    }
 }

@@ -713,5 +713,21 @@ public class ImsUt implements ImsUtInterface {
                 mPendingCmds.remove(key);
             }
         }
+
+        // MTK
+
+        /**
+         * Notifies the status of the call forwarding in a time slot supplementary service.
+         */
+        @Override
+        public void utConfigurationCallForwardInTimeSlotQueried(IImsUt ut,
+                int id, ImsCallForwardInfoEx[] cfInfo) {
+            Integer key = Integer.valueOf(id);
+
+            synchronized (mLockObj) {
+                sendSuccessReport(mPendingCmds.get(key), cfInfo);
+                mPendingCmds.remove(key);
+            }
+        }
     }
 }

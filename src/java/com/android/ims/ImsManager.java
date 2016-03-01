@@ -82,7 +82,7 @@ public class ImsManager {
      * Internal use only.
      * @hide
      */
-    private static final String IMS_SERVICE = "ims";
+    public static final String IMS_SERVICE = "ims";
 
     /**
      * The result code to be sent back with the incoming call {@link PendingIntent}.
@@ -1073,6 +1073,17 @@ public class ImsManager {
 
             if (mListener != null) {
                 mListener.onVoiceMessageCountChanged(count);
+            }
+        }
+
+        @Override
+        public void registrationDisconnectedWithCause(int cause) {
+            if (DBG) {
+                log("registrationDisconnected :: cause=" + cause);
+            }
+
+            if (mListener != null) {
+                mListener.onImsDisconnectedWithCause(cause);
             }
         }
 
